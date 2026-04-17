@@ -1,0 +1,43 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+
+# Virtual environments
+venv/
+env/
+.venv/
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Database
+data/*.db
+*.db-journal
+
+# Environment (sensitive)
+.env
+.env.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Dashboard build
+dashboard/dist/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
