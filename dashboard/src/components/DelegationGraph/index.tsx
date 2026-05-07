@@ -116,8 +116,8 @@ const DelegationGraph: React.FC = () => {
 
     // Prepare edges
     const edges = graphData.edges.map((edge) => ({
-      source: edge.from,
-      target: edge.to,
+      source: edge.from_agent,
+      target: edge.to_agent,
       lineStyle: {
         color: capabilityColors[edge.capability] || '#999',
         width: 2,
@@ -136,7 +136,7 @@ const DelegationGraph: React.FC = () => {
           const p = params as { dataType?: string; data?: { name?: string; edgeData?: GraphEdge } }
           if (p.dataType === 'edge' && p.data?.edgeData) {
             const e = p.data.edgeData
-            return `${e.from} → ${e.to}<br/>能力: ${e.capability}<br/>衰减: ${JSON.stringify(e.attenuations)}`
+            return `${e.from_agent} → ${e.to_agent}<br/>能力: ${e.capability}<br/>衰减: ${JSON.stringify(e.attenuations)}`
           }
           if (p.dataType === 'node') {
             return p.data?.name || ''

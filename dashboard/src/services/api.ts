@@ -8,8 +8,10 @@ import type {
   AuditLogDetail,
   AuditLogsResponse,
   DelegationGraphResponse,
+  RecentTasksResponse,
   RevokeRequest,
   RevokeResponse,
+  TaskTraceResponse,
 } from '../types'
 
 const BASE_URL = '/api/v1'
@@ -116,6 +118,7 @@ class ApiService {
   // ============ Audit APIs ============
   async getAuditLogs(params: {
     agent_id?: string
+    task_id?: string
     action?: string
     result?: string
     start_time?: string
@@ -129,6 +132,20 @@ class ApiService {
 
   async getAuditLogDetail(logId: string): Promise<AuditLogDetail> {
     const response = await this.client.get<AuditLogDetail>(`/audit/logs/${logId}`)
+    return response.data
+  }
+
+  async getTaskTrace(taskId: string): Promise<TaskTraceResponse> {
+    const response = await this.client.get<TaskTraceResponse>(
+      `/audit/trace/${encodeURIComponent(taskId)}`,
+    )
+    return response.data
+  }
+
+  async getRecentAuditTasks(limit = 50): Promise<RecentTasksResponse> {
+    const response = await this.client.get<RecentTasksResponse>('/audit/tasks/recent', {
+      params: { limit },
+    })
     return response.data
   }
 

@@ -80,6 +80,8 @@ export interface AgentTokens {
 export interface AuditLog {
   log_id: string
   agent_id: string
+  parent_agent_id?: string | null
+  task_id?: string | null
   action: string
   resource: string
   result: 'ALLOWED' | 'DENIED' | 'ERROR'
@@ -105,6 +107,7 @@ export interface TokenChainItem {
 export interface AuditLogDetail extends AuditLog {
   token_chain: TokenChainItem[]
   request_context: Record<string, unknown>
+  task_context?: Record<string, unknown>
 }
 
 export interface AuditLogsResponse {
@@ -123,8 +126,8 @@ export interface GraphNode {
 }
 
 export interface GraphEdge {
-  from: string
-  to: string
+  from_agent: string
+  to_agent: string
   delegation_id: string
   capability: string
   attenuations: Record<string, unknown>
@@ -135,6 +138,36 @@ export interface GraphEdge {
 export interface DelegationGraphResponse {
   nodes: GraphNode[]
   edges: GraphEdge[]
+}
+
+export interface TaskTraceStep {
+  log_id: string
+  agent_id: string
+  parent_agent_id: string | null
+  task_id: string | null
+  action: string
+  resource: string
+  result: 'ALLOWED' | 'DENIED' | 'ERROR'
+  request_context: Record<string, unknown>
+  task_context: Record<string, unknown>
+  error_detail: string | null
+  created_at: string
+}
+
+export interface TaskTraceResponse {
+  task_id: string
+  total_steps: number
+  trace: TaskTraceStep[]
+}
+
+export interface RecentTaskSummary {
+  task_id: string
+  step_count: number
+  last_at: string
+}
+
+export interface RecentTasksResponse {
+  tasks: RecentTaskSummary[]
 }
 
 // ============ Revoke Types ============

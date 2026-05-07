@@ -5,7 +5,7 @@ echo "  Agentrust 系统初始化脚本"
 echo "========================================"
 echo ""
 
-cd "$(dirname "$0")/../backend"
+cd "$(dirname "$0")/.."
 
 echo "[1/2] 删除旧数据库..."
 if [ -f "../data/agentrust.db" ]; then

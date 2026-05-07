@@ -20,9 +20,10 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
-from app.crypto.keys import load_public_key_pem
+from app.crypto.keys import load_public_key_pem, load_private_key_pem as load_private_key
 from app.crypto.signature import sign_json
 from app.crypto.canonical import canonical_json
+from app.crypto.jwt import JWTUtils
 from app.schemas.common import ErrorCode, VALID_CAPABILITIES
 from app.utils import generate_id, now_iso, parse_iso, hours_to_iso
 from app.services.attenuator import merge_and_validate_attenuations, AttenuationError

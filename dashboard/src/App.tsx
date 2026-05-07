@@ -8,12 +8,14 @@ import {
   AuditOutlined,
   LogoutOutlined,
   UserOutlined,
+  NodeIndexOutlined,
 } from '@ant-design/icons'
 import type { MenuProps } from 'antd'
 import LoginPage from './components/Login'
 import CertView from './components/CertView'
 import DelegationGraph from './components/DelegationGraph'
 import AuditView from './components/AuditView'
+import TaskTraceView from './components/TaskTraceView'
 import { useAuth } from './hooks/useAuth'
 
 const { Header, Content, Sider } = Layout
@@ -47,6 +49,11 @@ const DashboardLayout: React.FC = () => {
       icon: <AuditOutlined />,
       label: '审计日志',
     },
+    {
+      key: 'trace',
+      icon: <NodeIndexOutlined />,
+      label: '任务链路',
+    },
   ]
 
   const userMenuItems: MenuProps['items'] = [
@@ -73,6 +80,8 @@ const DashboardLayout: React.FC = () => {
         return <DelegationGraph />
       case 'audit':
         return <AuditView />
+      case 'trace':
+        return <TaskTraceView />
       default:
         return <OverviewPanel />
     }
@@ -227,6 +236,32 @@ const OverviewPanel: React.FC = () => {
               onClick={() => (window.location.href = '/dashboard/audit')}
             >
               查看日志
+            </Button>
+          </div>
+        </div>
+
+        <div
+          style={{
+            padding: 24,
+            borderRadius: 8,
+            background: 'linear-gradient(135deg, #1677ff 0%, #91caff 100%)',
+            color: '#fff',
+          }}
+        >
+          <NodeIndexOutlined style={{ fontSize: 32 }} />
+          <Title level={2} style={{ color: '#fff', marginTop: 16 }}>
+            任务链路
+          </Title>
+          <Text style={{ color: 'rgba(255,255,255,0.8)' }}>
+            按 task_id 查看多 Agent 协作的完整审计轨迹
+          </Text>
+          <div style={{ marginTop: 16 }}>
+            <Button
+              type="primary"
+              ghost
+              onClick={() => (window.location.href = '/dashboard/trace')}
+            >
+              打开链路视图
             </Button>
           </div>
         </div>

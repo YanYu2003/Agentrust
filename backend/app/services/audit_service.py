@@ -39,6 +39,7 @@ class AuditService:
         agent_id_filter: Optional[str] = None,
         action_filter: Optional[str] = None,
         result_filter: Optional[str] = None,
+        task_id_filter: Optional[str] = None,
         start_time: Optional[str] = None,
         end_time: Optional[str] = None,
         page: int = 1,
@@ -83,6 +84,10 @@ class AuditService:
             conditions.append("result = :result_filter")
             params["result_filter"] = result_filter
 
+        if task_id_filter:
+            conditions.append("task_id = :task_id_filter")
+            params["task_id_filter"] = task_id_filter
+
         if start_time:
             conditions.append("created_at >= :start_time")
             params["start_time"] = start_time
@@ -105,7 +110,7 @@ class AuditService:
         # Get paginated results
         offset = (page - 1) * page_size
         query = f"""
-            SELECT log_id, agent_id, action, resource, result,
+            SELECT log_id, agent_id, parent_agent_id, task_id, action, resource, result,
                    delegation_chain_summary, created_at
             FROM audit_logs
             WHERE {where_clause}
@@ -122,11 +127,13 @@ class AuditService:
             {
                 "log_id": row[0],
                 "agent_id": row[1],
-                "action": row[2],
-                "resource": row[3],
-                "result": row[4],
-                "delegation_chain_summary": row[5],
-                "created_at": row[6],
+                "parent_agent_id": row[2],
+                "task_id": row[3],
+                "action": row[4],
+                "resource": row[5],
+                "result": row[6],
+                "delegation_chain_summary": row[7],
+                "created_at": row[8],
             }
             for row in rows
         ]
@@ -151,8 +158,8 @@ class AuditService:
             Audit log detail or None if not found
         """
         query = """
-            SELECT log_id, agent_id, action, resource, result,
-                   token_chain, request_context, delegation_chain_summary,
+            SELECT log_id, agent_id, parent_agent_id, task_id, action, resource, result,
+                   token_chain, request_context, task_context, delegation_chain_summary,
                    error_detail, created_at
             FROM audit_logs
             WHERE log_id = :log_id
@@ -170,14 +177,17 @@ class AuditService:
         return {
             "log_id": row[0],
             "agent_id": row[1],
-            "action": row[2],
-            "resource": row[3],
-            "result": row[4],
-            "token_chain": json.loads(row[5]) if row[5] else [],
-            "request_context": json.loads(row[6]) if row[6] else {},
-            "delegation_chain_summary": row[7],
-            "error_detail": row[8],
-            "created_at": row[9],
+            "parent_agent_id": row[2],
+            "task_id": row[3],
+            "action": row[4],
+            "resource": row[5],
+            "result": row[6],
+            "token_chain": json.loads(row[7]) if row[7] else [],
+            "request_context": json.loads(row[8]) if row[8] else {},
+            "task_context": json.loads(row[9]) if row[9] else {},
+            "delegation_chain_summary": row[10],
+            "error_detail": row[11],
+            "created_at": row[12],
         }
 
     async def get_delegation_graph(
@@ -199,7 +209,6 @@ class AuditService:
                 "manage_agents capability required to view delegation graph"
             )
 
-        # Get all active agents as nodes
         agents_query = """
             SELECT agent_id, name, trust_level, status
             FROM agents
@@ -218,7 +227,6 @@ class AuditService:
             for row in agent_rows
         ]
 
-        # Get all active delegation tokens as edges
         delegation_query = """
             SELECT delegation_id, from_agent_id, to_agent_id, capability,
                    attenuations, status, expires_at
@@ -248,6 +256,105 @@ class AuditService:
             "nodes": nodes,
             "edges": edges,
         }
+
+    async def get_task_trace(
+        self,
+        task_id: str,
+        requester_agent_id: Optional[str] = None,
+        requester_has_manage_agents: bool = False,
+    ) -> List[Dict[str, Any]]:
+        """
+        Get full trace of all audit logs for a specific task ID.
+        
+        Args:
+            task_id: Task ID to trace
+            requester_agent_id: Agent ID making the request
+            requester_has_manage_agents: Whether requester has manage_agents capability
+            
+        Returns:
+            List of audit logs in chronological order
+        """
+        query = """
+            SELECT log_id, agent_id, parent_agent_id, task_id, action, resource, 
+                   result, request_context, task_context, error_detail, created_at
+            FROM audit_logs
+            WHERE task_id = :task_id
+            ORDER BY created_at ASC
+        """
+        
+        result = await self.session.execute(text(query), {"task_id": task_id})
+        rows = result.fetchall()
+        
+        logs = []
+        for row in rows:
+            # 权限校验：非管理员只能查看自己参与的任务
+            if not requester_has_manage_agents and requester_agent_id:
+                if row[1] != requester_agent_id and row[2] != requester_agent_id:
+                    continue
+            
+            logs.append({
+                "log_id": row[0],
+                "agent_id": row[1],
+                "parent_agent_id": row[2],
+                "task_id": row[3],
+                "action": row[4],
+                "resource": row[5],
+                "result": row[6],
+                "request_context": json.loads(row[7]) if row[7] else {},
+                "task_context": json.loads(row[8]) if row[8] else {},
+                "error_detail": row[9],
+                "created_at": row[10],
+            })
+        
+        return logs
+
+    async def list_recent_tasks(
+        self,
+        limit: int = 50,
+        requester_agent_id: Optional[str] = None,
+        requester_has_manage_agents: bool = False,
+    ) -> List[Dict[str, Any]]:
+        """Recent distinct task_ids for dashboard picker (newest first)."""
+        limit = min(max(limit, 1), 100)
+        if requester_has_manage_agents:
+            query = """
+                SELECT task_id, COUNT(*) AS step_count, MAX(created_at) AS last_at
+                FROM audit_logs
+                WHERE task_id IS NOT NULL AND TRIM(task_id) != ''
+                GROUP BY task_id
+                ORDER BY last_at DESC
+                LIMIT :limit
+            """
+            result = await self.session.execute(text(query), {"limit": limit})
+        else:
+            if not requester_agent_id:
+                return []
+            query = """
+                SELECT task_id, COUNT(*) AS step_count, MAX(created_at) AS last_at
+                FROM audit_logs
+                WHERE task_id IS NOT NULL AND TRIM(task_id) != ''
+                  AND task_id IN (
+                      SELECT DISTINCT task_id FROM audit_logs
+                      WHERE task_id IS NOT NULL AND TRIM(task_id) != ''
+                        AND (agent_id = :aid OR parent_agent_id = :aid)
+                  )
+                GROUP BY task_id
+                ORDER BY last_at DESC
+                LIMIT :limit
+            """
+            result = await self.session.execute(
+                text(query),
+                {"limit": limit, "aid": requester_agent_id},
+            )
+        rows = result.fetchall()
+        return [
+            {
+                "task_id": row[0],
+                "step_count": row[1],
+                "last_at": row[2],
+            }
+            for row in rows
+        ]
 
     async def get_alert_status(
         self,

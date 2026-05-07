@@ -17,6 +17,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
+from app.crypto.jwt import JWTUtils
 from app.utils import generate_id, now_iso, parse_iso
 from app.schemas.common import ErrorCode, SessionInfo
 
@@ -74,7 +75,7 @@ class AuthService:
             "trust_level": trust_level,
         }
 
-        # Create token
+        # 暂时保留老的签发逻辑，保证兼容性
         token = self._sign_token(payload)
 
         # Store session in database
@@ -145,51 +146,74 @@ class AuthService:
         Raises:
             AuthServiceError if invalid
         """
-        parts = token.split(".")
-        if len(parts) != 3:
-            raise AuthServiceError(ErrorCode.AUTH_REQUIRED, "Invalid session token format")
+        # 兼容层：先判断是否为标准JWT格式
+        if JWTUtils.is_jwt_format(token):
+            payload = JWTUtils.decode(token, settings.session_secret)
+            if not payload:
+                raise AuthServiceError(ErrorCode.AUTH_REQUIRED, "Invalid JWT session token")
+            
+            # Check expiration (JWT exp already verified in decode)
+            expires_at = payload.get("expires_at")
+            if expires_at:
+                if parse_iso(expires_at) < datetime.utcnow():
+                    raise AuthServiceError(ErrorCode.AUTH_EXPIRED, "Session token expired")
+            
+            return SessionInfo(
+                session_id=payload["session_id"],
+                agent_id=payload["agent_id"],
+                cert_id=payload["cert_id"],
+                issued_at=payload["issued_at"],
+                expires_at=payload["expires_at"],
+                challenge_id=payload["challenge_id"],
+                trust_level=payload["trust_level"],
+            )
+        else:
+            # 老版本session token验证逻辑保持不变
+            parts = token.split(".")
+            if len(parts) != 3:
+                raise AuthServiceError(ErrorCode.AUTH_REQUIRED, "Invalid session token format")
 
-        header_b64, payload_b64, signature_b64 = parts
+            header_b64, payload_b64, signature_b64 = parts
 
-        # Verify signature
-        signing_input = f"{header_b64}.{payload_b64}"
-        expected_sig = hmac.new(
-            self.session_secret,
-            signing_input.encode(),
-            hashlib.sha256
-        ).digest()
-        expected_sig_b64 = base64.urlsafe_b64encode(expected_sig).decode().rstrip("=")
+            # Verify signature
+            signing_input = f"{header_b64}.{payload_b64}"
+            expected_sig = hmac.new(
+                self.session_secret,
+                signing_input.encode(),
+                hashlib.sha256
+            ).digest()
+            expected_sig_b64 = base64.urlsafe_b64encode(expected_sig).decode().rstrip("=")
 
-        # Constant-time comparison
-        if not hmac.compare_digest(signature_b64, expected_sig_b64):
-            raise AuthServiceError(ErrorCode.AUTH_REQUIRED, "Session token signature invalid")
+            # Constant-time comparison
+            if not hmac.compare_digest(signature_b64, expected_sig_b64):
+                raise AuthServiceError(ErrorCode.AUTH_REQUIRED, "Session token signature invalid")
 
-        # Decode payload
-        try:
-            # Add padding if needed
-            padding = 4 - len(payload_b64) % 4
-            if padding != 4:
-                payload_b64 += "=" * padding
-            payload_json = base64.urlsafe_b64decode(payload_b64).decode()
-            payload = json.loads(payload_json)
-        except Exception as e:
-            raise AuthServiceError(ErrorCode.AUTH_REQUIRED, f"Invalid session token payload: {e}")
+            # Decode payload
+            try:
+                # Add padding if needed
+                padding = 4 - len(payload_b64) % 4
+                if padding != 4:
+                    payload_b64 += "=" * padding
+                payload_json = base64.urlsafe_b64decode(payload_b64).decode()
+                payload = json.loads(payload_json)
+            except Exception as e:
+                raise AuthServiceError(ErrorCode.AUTH_REQUIRED, f"Invalid session token payload: {e}")
 
-        # Check expiration
-        expires_at = payload.get("expires_at")
-        if expires_at:
-            if parse_iso(expires_at) < datetime.utcnow():
-                raise AuthServiceError(ErrorCode.AUTH_EXPIRED, "Session token expired")
+            # Check expiration
+            expires_at = payload.get("expires_at")
+            if expires_at:
+                if parse_iso(expires_at) < datetime.utcnow():
+                    raise AuthServiceError(ErrorCode.AUTH_EXPIRED, "Session token expired")
 
-        return SessionInfo(
-            session_id=payload["session_id"],
-            agent_id=payload["agent_id"],
-            cert_id=payload["cert_id"],
-            issued_at=payload["issued_at"],
-            expires_at=payload["expires_at"],
-            challenge_id=payload["challenge_id"],
-            trust_level=payload["trust_level"],
-        )
+            return SessionInfo(
+                session_id=payload["session_id"],
+                agent_id=payload["agent_id"],
+                cert_id=payload["cert_id"],
+                issued_at=payload["issued_at"],
+                expires_at=payload["expires_at"],
+                challenge_id=payload["challenge_id"],
+                trust_level=payload["trust_level"],
+            )
 
     async def validate_session(self, token: str) -> SessionInfo:
         """

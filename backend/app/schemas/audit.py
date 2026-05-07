@@ -10,6 +10,8 @@ class AuditLogSummary(BaseModel):
     """Audit log summary for list view."""
     log_id: str
     agent_id: str
+    parent_agent_id: Optional[str] = None
+    task_id: Optional[str] = None
     action: str
     resource: str
     result: str  # "ALLOWED", "DENIED", "ERROR"
@@ -48,11 +50,14 @@ class AuditLogDetailResponse(BaseModel):
     """Response model for single audit log detail."""
     log_id: str
     agent_id: str
+    parent_agent_id: Optional[str] = None
+    task_id: Optional[str] = None
     action: str
     resource: str
     result: str
     token_chain: List[Dict[str, Any]]
     request_context: Dict[str, Any]
+    task_context: Dict[str, Any] = Field(default_factory=dict)
     delegation_chain_summary: Optional[str] = None
     error_detail: Optional[str] = None
     created_at: str
@@ -93,9 +98,44 @@ class AlertStatusResponse(BaseModel):
     last_checked_at: str
 
 
+class RecentTaskSummary(BaseModel):
+    """One row for recent task_id picker."""
+    task_id: str
+    step_count: int
+    last_at: str
+
+
+class RecentTasksResponse(BaseModel):
+    """Recent tasks with audit trail."""
+    tasks: List[RecentTaskSummary]
+
+
+class TaskTraceStep(BaseModel):
+    """Single step in a task trace."""
+    log_id: str
+    agent_id: str
+    parent_agent_id: Optional[str] = None
+    task_id: Optional[str] = None
+    action: str
+    resource: str
+    result: str
+    request_context: Dict[str, Any] = Field(default_factory=dict)
+    task_context: Dict[str, Any] = Field(default_factory=dict)
+    error_detail: Optional[str] = None
+    created_at: str
+
+
+class TaskTraceResponse(BaseModel):
+    """Full trace for one task_id."""
+    task_id: str
+    total_steps: int
+    trace: List[TaskTraceStep]
+
+
 class AuditLogQueryParams(BaseModel):
     """Query parameters for audit log list."""
     agent_id: Optional[str] = None
+    task_id: Optional[str] = None
     action: Optional[str] = None
     result: Optional[str] = None
     start_time: Optional[str] = None

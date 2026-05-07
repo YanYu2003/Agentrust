@@ -40,6 +40,15 @@ class ExecuteRequest(BaseModel):
         min_length=2,
         description="Token chain (certificate -> capability -> [delegations])"
     )
+    task_id: Optional[str] = Field(default=None, description="Correlation ID for full-chain audit tracing")
+    parent_agent_id: Optional[str] = Field(
+        default=None,
+        description="Upstream Agent ID in A2A call chain (audit)",
+    )
+    task_context: Optional[Dict[str, Any]] = Field(
+        default=None,
+        description="Optional client metadata merged into audit task_context",
+    )
 
     @field_validator("action")
     @classmethod

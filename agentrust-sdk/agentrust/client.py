@@ -318,6 +318,9 @@ class AgentClient:
         resource: str,
         params: Dict[str, Any] = None,
         delegation_chain: List[Dict[str, str]] = None,
+        task_id: str = None,
+        parent_agent_id: str = None,
+        task_context: Dict[str, Any] = None,
     ) -> Dict[str, Any]:
         """
         Execute a protected operation.
@@ -329,6 +332,9 @@ class AgentClient:
             resource: Resource identifier (e.g., "user_table").
             params: Optional operation parameters.
             delegation_chain: Optional list of delegation tokens to include.
+            task_id: Optional task correlation ID for audit tracing.
+            parent_agent_id: Optional upstream agent ID for audit tracing.
+            task_context: Optional client metadata merged into audit task_context.
 
         Returns:
             Operation result data.
@@ -340,15 +346,23 @@ class AgentClient:
         """
         token_chain = self._build_token_chain(action, delegation_chain)
 
+        data: Dict[str, Any] = {
+            "action": action,
+            "resource": resource,
+            "params": params or {},
+            "token_chain": token_chain,
+        }
+        if task_id is not None:
+            data["task_id"] = task_id
+        if parent_agent_id is not None:
+            data["parent_agent_id"] = parent_agent_id
+        if task_context is not None:
+            data["task_context"] = task_context
+
         return self._make_request(
             "POST",
             "/resources/execute",
-            data={
-                "action": action,
-                "resource": resource,
-                "params": params or {},
-                "token_chain": token_chain,
-            },
+            data=data,
             auth=True,
         )
 

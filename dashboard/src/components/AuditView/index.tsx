@@ -13,6 +13,7 @@ import {
   Empty,
   Drawer,
   Descriptions,
+  Input,
 } from 'antd'
 import {
   AuditOutlined,
@@ -20,6 +21,7 @@ import {
   CheckCircleOutlined,
   CloseCircleOutlined,
   WarningOutlined,
+  BranchesOutlined,
 } from '@ant-design/icons'
 import { useQuery } from '@tanstack/react-query'
 import dayjs from 'dayjs'
@@ -64,6 +66,16 @@ const LogDetailDrawer: React.FC<LogDetailDrawerProps> = ({ log, open, onClose })
         <Descriptions.Item label="Agent ID">
           <Text code>{log.agent_id}</Text>
         </Descriptions.Item>
+        {log.parent_agent_id ? (
+          <Descriptions.Item label="上游 Agent">
+            <Text code>{log.parent_agent_id}</Text>
+          </Descriptions.Item>
+        ) : null}
+        {log.task_id ? (
+          <Descriptions.Item label="task_id">
+            <Text code>{log.task_id}</Text>
+          </Descriptions.Item>
+        ) : null}
         <Descriptions.Item label="操作">
           <Tag color="blue">{log.action}</Tag>
         </Descriptions.Item>
@@ -116,6 +128,25 @@ const LogDetailDrawer: React.FC<LogDetailDrawerProps> = ({ log, open, onClose })
       >
         {JSON.stringify(log.request_context, null, 2)}
       </pre>
+
+      {log.task_context != null && Object.keys(log.task_context).length > 0 ? (
+        <>
+          <Title level={5} style={{ marginTop: 24 }}>
+            任务上下文（task_context）
+          </Title>
+          <pre
+            style={{
+              background: '#f5f5f5',
+              padding: 16,
+              borderRadius: 8,
+              overflow: 'auto',
+              fontSize: 12,
+            }}
+          >
+            {JSON.stringify(log.task_context, null, 2)}
+          </pre>
+        </>
+      ) : null}
     </Drawer>
   )
 }
@@ -123,6 +154,7 @@ const LogDetailDrawer: React.FC<LogDetailDrawerProps> = ({ log, open, onClose })
 const AuditView: React.FC = () => {
   const [filters, setFilters] = useState({
     agent_id: '',
+    task_id: '',
     action: '',
     result: '',
     start_time: dayjs().subtract(7, 'day').toISOString(),
@@ -180,6 +212,7 @@ const AuditView: React.FC = () => {
 
   const handleFilterChange = (changedValues: Record<string, unknown>) => {
     if ('agent_id' in changedValues) setFilters((f) => ({ ...f, agent_id: changedValues.agent_id as string }))
+    if ('task_id' in changedValues) setFilters((f) => ({ ...f, task_id: changedValues.task_id as string }))
     if ('action' in changedValues) setFilters((f) => ({ ...f, action: changedValues.action as string }))
     if ('result' in changedValues) setFilters((f) => ({ ...f, result: changedValues.result as string }))
   }
@@ -208,6 +241,23 @@ const AuditView: React.FC = () => {
       key: 'agent_id',
       width: 150,
       render: (id: string) => <Text code>{id.substring(0, 16)}...</Text>,
+    },
+    {
+      title: '上游',
+      dataIndex: 'parent_agent_id',
+      key: 'parent_agent_id',
+      width: 120,
+      ellipsis: true,
+      render: (v: string | null | undefined) =>
+        v ? <Text code>{v.length > 12 ? `${v.slice(0, 12)}…` : v}</Text> : '-',
+    },
+    {
+      title: 'task_id',
+      dataIndex: 'task_id',
+      key: 'task_id',
+      width: 140,
+      ellipsis: true,
+      render: (v: string | null | undefined) => (v ? <Text code>{v}</Text> : '-'),
     },
     {
       title: '操作',
@@ -243,11 +293,24 @@ const AuditView: React.FC = () => {
     {
       title: '操作',
       key: 'actions',
-      width: 80,
+      width: 160,
       render: (_: unknown, log: AuditLog) => (
-        <Button size="small" icon={<EyeOutlined />} onClick={() => handleViewDetail(log)}>
-          详情
-        </Button>
+        <Space size="small">
+          {log.task_id ? (
+            <Button
+              size="small"
+              icon={<BranchesOutlined />}
+              onClick={() => {
+                window.location.href = `/dashboard/trace?task_id=${encodeURIComponent(log.task_id!)}`
+              }}
+            >
+              链路
+            </Button>
+          ) : null}
+          <Button size="small" icon={<EyeOutlined />} onClick={() => handleViewDetail(log)}>
+            详情
+          </Button>
+        </Space>
       ),
     },
   ]
@@ -277,13 +340,19 @@ const AuditView: React.FC = () => {
           onValuesChange={handleFilterChange}
           initialValues={{
             agent_id: filters.agent_id,
+            task_id: filters.task_id,
             action: filters.action,
             result: filters.result,
             time: [dayjs().subtract(7, 'day'), dayjs()],
           }}
         >
           <Row gutter={16}>
-            <Col span={6}>
+            <Col xs={24} md={8}>
+              <Form.Item name="task_id" label="task_id" style={{ marginBottom: 12 }}>
+                <Input allowClear placeholder="精确匹配 task_id" />
+              </Form.Item>
+            </Col>
+            <Col xs={24} md={8}>
               <Form.Item name="agent_id" label="Agent" style={{ marginBottom: 12 }}>
                 <Select
                   allowClear
@@ -294,17 +363,19 @@ const AuditView: React.FC = () => {
                 />
               </Form.Item>
             </Col>
-            <Col span={6}>
+            <Col xs={24} md={8}>
               <Form.Item name="action" label="操作类型" style={{ marginBottom: 12 }}>
                 <Select allowClear placeholder="选择操作" options={actionOptions} />
               </Form.Item>
             </Col>
-            <Col span={6}>
+          </Row>
+          <Row gutter={16}>
+            <Col xs={24} md={8}>
               <Form.Item name="result" label="结果" style={{ marginBottom: 12 }}>
                 <Select allowClear placeholder="选择结果" options={resultOptions} />
               </Form.Item>
             </Col>
-            <Col span={6}>
+            <Col xs={24} md={16}>
               <Form.Item name="time" label="时间范围" style={{ marginBottom: 12 }}>
                 <RangePicker style={{ width: '100%' }} onChange={handleTimeChange} />
               </Form.Item>

@@ -32,8 +32,13 @@ data/*.db
 *.swp
 *.swo
 
-# Dashboard build
+# Dashboard build & deps (never commit)
 dashboard/dist/
+dashboard/node_modules/
+
+# Office / editor temp lock files
+~$*
+*.tmp
 
 # OS
 .DS_Store

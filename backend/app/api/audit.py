@@ -25,6 +25,10 @@ from app.schemas.audit import (
     AuditLogDetailResponse,
     DelegationGraphResponse,
     AlertStatusResponse,
+    RecentTasksResponse,
+    RecentTaskSummary,
+    TaskTraceResponse,
+    TaskTraceStep,
 )
 
 logger = logging.getLogger(__name__)
@@ -66,6 +70,7 @@ async def _check_manage_agents(session: AsyncSession, session_info: SessionInfo)
 async def list_audit_logs(
     request: Request,
     agent_id: Optional[str] = Query(None, description="Filter by agent ID"),
+    task_id: Optional[str] = Query(None, description="Filter by task ID (full-chain correlation)"),
     action: Optional[str] = Query(None, description="Filter by action"),
     result: Optional[str] = Query(None, description="Filter by result (ALLOWED/DENIED/ERROR)"),
     start_time: Optional[str] = Query(None, description="Start time (ISO8601)"),
@@ -101,6 +106,7 @@ async def list_audit_logs(
             agent_id_filter=agent_id,
             action_filter=action,
             result_filter=result,
+            task_id_filter=task_id,
             start_time=start_time,
             end_time=end_time,
             page=page,
@@ -123,6 +129,43 @@ async def list_audit_logs(
             detail=ErrorResponse.create(
                 ErrorCode.INTERNAL_ERROR,
                 "Error querying audit logs",
+            ).model_dump(),
+        )
+
+
+@router.get(
+    "/tasks/recent",
+    response_model=RecentTasksResponse,
+    responses={
+        401: {"model": ErrorResponse, "description": "Authentication required"},
+        500: {"model": ErrorResponse, "description": "Internal error"},
+    },
+)
+async def list_recent_audit_tasks(
+    request: Request,
+    limit: int = Query(50, ge=1, le=100, description="Max number of tasks"),
+    session_info: SessionInfo = Depends(require_auth),
+    session: AsyncSession = Depends(get_session),
+) -> RecentTasksResponse:
+    """Recent task_ids that have audit rows (for dashboard picker)."""
+    try:
+        has_manage_agents = await _check_manage_agents(session, session_info)
+        from app.services.audit_service import AuditService
+
+        service = AuditService(session)
+        rows = await service.list_recent_tasks(
+            limit=limit,
+            requester_agent_id=session_info.agent_id,
+            requester_has_manage_agents=has_manage_agents,
+        )
+        return RecentTasksResponse(tasks=[RecentTaskSummary(**r) for r in rows])
+    except Exception as e:
+        logger.exception(f"Error listing recent tasks: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=ErrorResponse.create(
+                ErrorCode.INTERNAL_ERROR,
+                "Error listing recent tasks",
             ).model_dump(),
         )
 
@@ -186,6 +229,67 @@ async def get_audit_log_detail(
             detail=ErrorResponse.create(
                 ErrorCode.INTERNAL_ERROR,
                 "Error retrieving audit log detail",
+            ).model_dump(),
+        )
+
+
+@router.get(
+    "/trace/{task_id}",
+    response_model=TaskTraceResponse,
+    responses={
+        401: {"model": ErrorResponse, "description": "Authentication required"},
+        404: {"model": ErrorResponse, "description": "Task not found"},
+        500: {"model": ErrorResponse, "description": "Internal error"},
+    },
+)
+async def get_task_trace(
+    task_id: str,
+    request: Request,
+    session_info: SessionInfo = Depends(require_auth),
+    session: AsyncSession = Depends(get_session),
+) -> TaskTraceResponse:
+    """
+    Get full trace of all operations for a specific task ID.
+    
+    Returns the complete call chain of all agents involved in the task,
+    in chronological order. Includes all audit logs with task_id matching.
+    """
+    try:
+        has_manage_agents = await _check_manage_agents(session, session_info)
+        
+        from app.services.audit_service import AuditService
+        service = AuditService(session)
+        
+        trace_logs = await service.get_task_trace(
+            task_id=task_id,
+            requester_agent_id=session_info.agent_id,
+            requester_has_manage_agents=has_manage_agents,
+        )
+        
+        if not trace_logs:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=ErrorResponse.create(
+                    ErrorCode.NOT_FOUND,
+                    f"No trace found for task {task_id} or access denied",
+                ).model_dump(),
+            )
+
+        return TaskTraceResponse(
+            task_id=task_id,
+            total_steps=len(trace_logs),
+            trace=[TaskTraceStep(**row) for row in trace_logs],
+        )
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception(f"Error getting task trace: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=ErrorResponse.create(
+                ErrorCode.INTERNAL_ERROR,
+                "Error retrieving task trace",
             ).model_dump(),
         )
 

@@ -109,6 +109,12 @@ async def execute_resource(
             token_chain=token_chain,
             request_context=_get_request_context(request),
             delegation_chain_summary=verification_result.delegation_path,
+            task_id=execute_req.task_id,
+            parent_agent_id=execute_req.parent_agent_id,
+            task_context=_merge_audit_task_context(
+                execute_req,
+                result_snapshot=execute_result.model_dump(exclude_none=True),
+            ),
         )
 
         await session.commit()
@@ -133,6 +139,9 @@ async def execute_resource(
             request_context=_get_request_context(request),
             delegation_chain_summary=None,
             error_detail=e.message,
+            task_id=execute_req.task_id,
+            parent_agent_id=execute_req.parent_agent_id,
+            task_context=_merge_audit_task_context(execute_req, error=e.message),
         )
         await session.commit()
 
@@ -159,6 +168,9 @@ async def execute_resource(
             request_context=_get_request_context(request),
             delegation_chain_summary=None,
             error_detail=e.message,
+            task_id=execute_req.task_id,
+            parent_agent_id=execute_req.parent_agent_id,
+            task_context=_merge_audit_task_context(execute_req, error=e.message),
         )
         await session.commit()
 
@@ -186,6 +198,9 @@ async def execute_resource(
                 request_context=_get_request_context(request),
                 delegation_chain_summary=None,
                 error_detail=str(e),
+                task_id=execute_req.task_id,
+                parent_agent_id=execute_req.parent_agent_id,
+                task_context=_merge_audit_task_context(execute_req, error=str(e)),
             )
             await session.commit()
         except Exception:
@@ -200,6 +215,24 @@ async def execute_resource(
         )
 
 
+def _merge_audit_task_context(
+    execute_req: ExecuteRequest,
+    *,
+    result_snapshot: Optional[Dict[str, Any]] = None,
+    error: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Build task_context JSON for audit (params + optional snapshot / error)."""
+    ctx: Dict[str, Any] = {}
+    if execute_req.task_context:
+        ctx.update(execute_req.task_context)
+    ctx["params"] = execute_req.params
+    if result_snapshot is not None:
+        ctx["result_snapshot"] = result_snapshot
+    if error:
+        ctx["error"] = error
+    return ctx
+
+
 async def _record_audit_log(
     session: AsyncSession,
     agent_id: str,
@@ -210,27 +243,36 @@ async def _record_audit_log(
     request_context: Dict[str, Any],
     delegation_chain_summary: Optional[str],
     error_detail: Optional[str] = None,
+    task_id: Optional[str] = None,
+    parent_agent_id: Optional[str] = None,
+    task_context: Optional[Dict[str, Any]] = None,
 ) -> None:
     """Record an audit log entry."""
     log_id = generate_id("log")
     now = now_iso()
+    task_context = task_context or {}
 
     await session.execute(
         text("""
             INSERT INTO audit_logs
-            (log_id, agent_id, action, resource, result, token_chain, request_context,
-             delegation_chain_summary, error_detail, created_at)
-            VALUES (:log_id, :agent_id, :action, :resource, :result, :token_chain,
-                    :request_context, :delegation_chain_summary, :error_detail, :created_at)
+            (log_id, agent_id, parent_agent_id, task_id, action, resource, result, 
+             token_chain, request_context, task_context, delegation_chain_summary, 
+             error_detail, created_at)
+            VALUES (:log_id, :agent_id, :parent_agent_id, :task_id, :action, :resource, 
+                    :result, :token_chain, :request_context, :task_context, 
+                    :delegation_chain_summary, :error_detail, :created_at)
         """),
         {
             "log_id": log_id,
             "agent_id": agent_id,
+            "parent_agent_id": parent_agent_id,
+            "task_id": task_id,
             "action": action,
             "resource": resource,
             "result": result,
             "token_chain": json.dumps(token_chain),
             "request_context": json.dumps(request_context),
+            "task_context": json.dumps(task_context),
             "delegation_chain_summary": delegation_chain_summary,
             "error_detail": error_detail,
             "created_at": now,

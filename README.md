@@ -8,6 +8,32 @@
 
 ## 快速开始
 
+### 方式 A：初赛第四周期一键演示（推荐评委）
+
+**前置：** Python 3.10+；建议先在后端目录执行 `scripts\setup.bat` 安装依赖并 `init_db`。Dashboard 需本机已安装 **Node.js / npm**。
+
+**Windows**
+
+```batch
+cd backend\scripts
+run_demo.bat
+```
+
+**Linux / macOS**
+
+```bash
+cd backend/scripts
+bash run_demo.sh
+```
+
+脚本将依次：启动 IAM（8000）并等待 `/health` → 启动三个场景 Agent（8001/8002/8003）→ 启动 Dashboard（5173）→ 运行 `demo_cycle4_normal.py` 与 `demo_cycle4_abnormal.py` → 打开浏览器。控制台会打印 **`task_id`、`agent_id`、`session_token`**，用于 Dashboard「演示 Session Token」登录或 Swagger `GET /api/v1/audit/trace/{task_id}`。
+
+详细步骤与截图占位说明见根目录 **`演示Demo-评委导读.md`**。生成 Word 评委稿：`python backend/scripts/build_demo_word_doc.py` → **`Agentrust-Demo-Judges.docx`**。
+
+仅启动服务、暂不跑 Python 演示：`set SKIP_DEMOS=1` 后执行 `run_demo.bat`。
+
+### 方式 B：经典 Demo 脚本（委托链长流程）
+
 ### 1. 进入后端目录
 
 ```bash
@@ -46,8 +72,12 @@ Agentrust/
 │   │   ├── services/        # 业务逻辑
 │   │   └── crypto/          # 密码学工具
 │   ├── scripts/
-│   │   ├── reset.bat/sh     # 初始化脚本
-│   │   ├── demo.py          # 演示程序
+│   │   ├── reset.bat/sh     # 清空 DB + init_db
+│   │   ├── setup.bat        # venv + pip + init_db
+│   │   ├── run_demo.bat/sh  # 第四周期一键演示（IAM + Agents + Dashboard + Cycle4 脚本）
+│   │   ├── spawn_uvicorn.bat # 子进程启动 uvicorn（规避 Windows start 与 main:app）
+│   │   ├── demo_cycle4_*.py # 正常 / 异常演示脚本
+│   │   ├── demo.py          # 经典委托链长流程演示
 │   │   └── init_db.py       # 数据库初始化
 │   ├── tests/               # 测试代码
 │   ├── data/                # 数据库文件目录
@@ -63,7 +93,10 @@ Agentrust/
 │   ├── public/              # 静态资源
 │   └── README.md            # Dashboard 说明
 │
-├── 方案书/                   # 设计文档
+├── 演示Demo-评委导读.md      # 评委演示说明（命令 / 输出 / 截图占位）
+├── 初赛阶段任务实施方案.md    # 五周期任务与交付索引
+├── 飞书AI校园大赛-个人阶段成果小结.md  # 个人复盘（按周期）
+├── Agentrust-Demo-Judges.docx # （可选）python backend/scripts/build_demo_word_doc.py 生成
 └── DEPLOYMENT.md            # 部署指南
 ```
 
@@ -94,4 +127,10 @@ Agentrust/
 cd backend
 python -m pytest tests/ -v
 ```
+
+## Dashboard 登录（演示）
+
+1. 运行 `run_demo.bat` 后，在正常演示完成输出中复制 **`session_token`** 与同次的 **`agent_id`**。  
+2. 打开 http://localhost:5173/login ，将 Token 粘贴到 **「演示 Session Token」**，填写 **Agent ID**，登录（成功后整页跳转进入仪表盘）。  
+3. 侧边栏 **「任务链路」** 中输入控制台打印的 **`task_id`** 查询。
 
