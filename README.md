@@ -2,13 +2,9 @@
 
 基于证书链 + 能力令牌的去中心化 Agent 身份与权限管理方案。
 
-## 项目赛道
-
-**飞书 AI 大模型安全赛道 · 课题二：给 AI 发通行证：构建 Agent 身份与权限系统**
-
 ## 快速开始
 
-### 方式 A：初赛第四周期一键演示（推荐评委）
+### 方式 A：一键演示（推荐）
 
 **前置：** Python 3.10+；建议先在后端目录执行 `scripts\setup.bat` 安装依赖并 `init_db`。Dashboard 需本机已安装 **Node.js / npm**。
 
@@ -28,7 +24,7 @@ bash run_demo.sh
 
 脚本将依次：启动 IAM（8000）并等待 `/health` → 启动三个场景 Agent（8001/8002/8003）→ 启动 Dashboard（5173）→ 运行 `demo_cycle4_normal.py` 与 `demo_cycle4_abnormal.py` → 打开浏览器。控制台会打印 **`task_id`、`agent_id`、`session_token`**，用于 Dashboard「演示 Session Token」登录或 Swagger `GET /api/v1/audit/trace/{task_id}`。
 
-详细步骤与截图占位说明见根目录 **`演示Demo-评委导读.md`**。生成 Word 评委稿：`python backend/scripts/build_demo_word_doc.py` → **`Agentrust-Demo-Judges.docx`**。
+详细步骤与截图占位说明见根目录 **`演示Demo-评委导读.md`**。
 
 仅启动服务、暂不跑 Python 演示：`set SKIP_DEMOS=1` 后执行 `run_demo.bat`。
 
@@ -93,9 +89,7 @@ Agentrust/
 │   ├── public/              # 静态资源
 │   └── README.md            # Dashboard 说明
 │
-├── 演示Demo-评委导读.md      # 评委演示说明（命令 / 输出 / 截图占位）
-├── 初赛阶段任务实施方案.md    # 五周期任务与交付索引
-├── 飞书AI校园大赛-个人阶段成果小结.md  # 个人复盘（按周期）
+├── 演示Demo-评委导读.md      # 演示说明文档
 ├── Agentrust-Demo-Judges.docx # （可选）python backend/scripts/build_demo_word_doc.py 生成
 └── DEPLOYMENT.md            # 部署指南
 ```
